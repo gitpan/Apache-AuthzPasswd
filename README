@@ -35,6 +35,16 @@ DESCRIPTION
      Apache::AuthenPasswd, since chances are they will be used
      together.
 
+     (SPEEVES NOTE:  This module does not seem to work without 
+     some sort of Authentication module used in conjunction with 
+     it...  I haven't looked extensively, but my testing always 
+     failed with a:
+
+     couldn't check user.  No user file?
+
+     error in the apache logs when I didn't have a module working 
+     at the authentication level.)
+
      This perl module is designed to work with mod_perl and the
      Apache::AuthenPasswd module by Demetrios E. Paneras
      (dep@media.mit.edu).  It is a direct adaptation (i.e. I

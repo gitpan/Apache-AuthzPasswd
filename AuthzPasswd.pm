@@ -1,46 +1,66 @@
 package Apache::AuthzPasswd;
 
 use strict;
-use Apache::Constants ':common';
+use mod_perl;
 
-$Apache::AuthzPasswd::VERSION = '0.10';
+$Apache::AuthzPasswd::VERSION = '0.11';
+
+# setting the constants to help identify which version of mod_perl
+# is installed
+use constant MP2 => ($mod_perl::VERSION >= 1.99);
+
+# test for the version of mod_perl, and use the appropriate libraries
+BEGIN {
+        if (MP2) {
+                require Apache::Const;
+                require Apache::Access;
+                require Apache::Connection;
+                require Apache::Log;
+                require Apache::RequestRec;
+                require Apache::RequestUtil;
+                Apache::Const->import(-compile => 'HTTP_UNAUTHORIZED','HTTP_INTERNAL_SERVER_ERROR','OK');
+        } else {
+                require Apache::Constants;
+                Apache::Constants->import('HTTP_UNAUTHORIZED','HTTP_INTERNAL_SERVER_ERROR','OK');
+        }
+}
 
 sub handler {
     my $r = shift;
     my $requires = $r->requires;
-    return OK unless $requires;
+    return MP2 ? Apache::OK : Apache::Constants::OK unless $requires;
 
-    my $name = $r->connection->user;
+    my $name = MP2 ? $r->user : $r->connection->user;
 
     for my $req (@$requires) {
         my($require, @list) = split /\s+/, $req->{requirement};
 
 	#ok if user is one of these users
 	if ($require eq "user") {
-	    return OK if grep $name eq $_, @list;
+	    return MP2 ? Apache::OK : Apache::Constants::OK if grep $name eq $_, @list;
 	}
 	#ok if user is simply authenticated
 	elsif ($require eq "valid-user") {
-	    return OK;
+	    return MP2 ? Apache::OK : Apache::Constants::OK;
 	}
 	elsif ($require eq "group") {
 	    foreach my $thisgroup (@list) {
 		my ($group, $passwd, $gid, $members) = getgrnam $thisgroup;
 		unless($group) {
 		    $r->note_basic_auth_failure;
-		    $r->log_reason("Apache::AuthzPasswd - group: $thisgroup unknown", $r->uri);
-		    return SERVER_ERROR;
+		    MP2 ? $r->log_error("Apache::AuthzPasswd - group: $thisgroup unknown", $r->uri) : $r->log_reason("Apache::AuthzPasswd - group: $thisgroup unknown", $r->uri);
+		    return MP2 ? Apache::HTTP_INTERNAL_SERVER_ERROR : Apache::Constants::HTTP_INTERNAL_SERVER_ERROR;
 		}
-		if($members =~ /\b$userin\b/) {
-		    return OK;
+		if($members =~ /\b$name\b/) {
+		    return MP2 ? Apache::OK : Apache::Constants::OK;
 		}
 	    }
 	}
     }
     
     $r->note_basic_auth_failure;
-    $r->log_reason("Apache::AuthzPasswd - user $name: not authorized", $r->uri);
-    return AUTH_REQUIRED;
+    MP2 ? $r->log_error("Apache::AuthzPasswd - user $name: not authorized", $r->uri) : $r->log_reason("Apache::AuthzPasswd - user $name: not authorized", $r->uri);
+    return MP2 ? Apache::HTTP_UNAUTHORIZED : Apache::Constants::HTTP_UNAUTHORIZED;
 }
 
 1;
@@ -84,6 +104,16 @@ since it has nothing to do with /etc/passwd, but rather works with
 association with Apache::AuthenPasswd, since chances are they will be used
 together.
 
+(SPEEVES NOTE:  This module does not seem to work without some sort of Authentication
+module used in conjunction with it...  I haven't looked extensively, but my
+testing always failed with a:
+
+couldn't check user.  No user file?
+
+error in the apache logs when I didn't have a module working at the authentication
+level.)
+
+
 This perl module is designed to work with mod_perl and the
 Apache::AuthenPasswd module by Demetrios E. Paneras (B<dep@media.mit.edu>).
 It is a direct adaptation (i.e. I modified the code) of Michael Parker's
@@ -114,11 +144,12 @@ that it was written hastily, to say the least.
 
 =head1 AUTHOR
 
-Demetrios E. Paneras <dep@media.mit.edu>
+Demetrios E. Paneras <dep@media.mit.edu> 
+and Shannon Eric Peevey <speeves@unt.edu>
 
 =head1 COPYRIGHT
 
-Copyright (c) 1998 Demetrios E. Paneras, MIT Media Laboratory.
+Copyright (c) 1998,2003 Demetrios E. Paneras, MIT Media Laboratory.
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
