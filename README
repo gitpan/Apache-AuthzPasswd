@@ -59,6 +59,12 @@ DESCRIPTION
      For completeness, the module also handles require user and
      require valid-user directives.
 
+     PerlSetVar SetRemoteGroup
+
+     This allows us to modify the REMOTE_GROUP CGI env variable.
+     When set to "yes" it sets REMOTE_GROUP to the group of the 
+     authorized user.  Defaults to "no".
+
      Apache::AuthenPasswd vs. Apache::AuthzPasswd
 
      I've taken "authentication" to be meaningful only in terms

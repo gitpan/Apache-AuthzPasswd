@@ -3,7 +3,7 @@ package Apache::AuthzPasswd;
 use strict;
 use mod_perl;
 
-$Apache::AuthzPasswd::VERSION = '0.11';
+$Apache::AuthzPasswd::VERSION = '0.12';
 
 # setting the constants to help identify which version of mod_perl
 # is installed
@@ -18,8 +18,10 @@ BEGIN {
                 require Apache::Log;
                 require Apache::RequestRec;
                 require Apache::RequestUtil;
+		require APR::Table;
                 Apache::Const->import(-compile => 'HTTP_UNAUTHORIZED','HTTP_INTERNAL_SERVER_ERROR','OK');
         } else {
+	       # require Apache::Log;
                 require Apache::Constants;
                 Apache::Constants->import('HTTP_UNAUTHORIZED','HTTP_INTERNAL_SERVER_ERROR','OK');
         }
@@ -31,6 +33,8 @@ sub handler {
     return MP2 ? Apache::OK : Apache::Constants::OK unless $requires;
 
     my $name = MP2 ? $r->user : $r->connection->user;
+
+    my $setremotegroup = $r->dir_config('SetRemoteGroup') || "no";
 
     for my $req (@$requires) {
         my($require, @list) = split /\s+/, $req->{requirement};
@@ -44,14 +48,21 @@ sub handler {
 	    return MP2 ? Apache::OK : Apache::Constants::OK;
 	}
 	elsif ($require eq "group") {
+	    # Get users primary group's gid
+	    my $ugid= [ getpwnam($name) ]->[3];
 	    foreach my $thisgroup (@list) {
+		# Then check if the user is member of the group
 		my ($group, $passwd, $gid, $members) = getgrnam $thisgroup;
 		unless($group) {
 		    $r->note_basic_auth_failure;
 		    MP2 ? $r->log_error("Apache::AuthzPasswd - group: $thisgroup unknown", $r->uri) : $r->log_reason("Apache::AuthzPasswd - group: $thisgroup unknown", $r->uri);
 		    return MP2 ? Apache::HTTP_INTERNAL_SERVER_ERROR : Apache::Constants::HTTP_INTERNAL_SERVER_ERROR;
 		}
-		if($members =~ /\b$name\b/) {
+		if($ugid == $gid || $members =~ /\b$name\b/) {
+		    if($setremotegroup eq "yes") {
+			$r->log->debug("Setting REMOTE_GROUP to $group");
+			my $x = $r->subprocess_env(REMOTE_GROUP => $group);
+		    }
 		    return MP2 ? Apache::OK : Apache::Constants::OK;
 		}
 	    }
@@ -82,6 +93,10 @@ Apache::AuthzPasswd - mod_perl /etc/group Group Authorization module
     # via /etc/passwd as well as authorize via /etc/group.
     # Apache::AuthenPasswd is a separate module.
     PerlAuthenHandler Apache::AuthenPasswd
+
+    # Set REMOTE_GROUP CGI env variable to authorized
+    # group.  Defaults to no.
+    PerlSetVar SetRemoteGroup  yes || no
 
     # Standard require stuff, users, groups and
     # "valid-user" all work OK
@@ -125,6 +140,11 @@ keys, until a match with the (already authenticated) B<user> is found.
 
 For completeness, the module also handles B<require user> and B<require
 valid-user> directives.
+
+= head2 PerlSetVar SetRemoteGroup
+
+Set to "yes" to set the CGI env variable REMOTE_GROUP to the group of the
+authorized user. Defaults to "no".
 
 = head2 Apache::AuthenPasswd vs. Apache::AuthzPasswd
 

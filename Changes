@@ -9,4 +9,7 @@ Revision history for Perl extension Apache::AuthzPasswd.
 	  and ask if you want to install 
 	  Apache::AuthzPasswd 
 	- added the test.pl to the MANIFEST
-	- 
+
+0.12  Fri Jan 02  13:03 2003
+	- Added check for Primary group. Thanks Fredrik Ax!
+	- Added update of CGI env variable REMOTE_GROUP to authorized group. Again, thanks Fredrik Ax!
